@@ -33,7 +33,8 @@
 </style>
 <body>
 
-<label class="tooltip">Texture Rip Default Size:<span class="tooltiptext">Sometimes required</span></label>
+<label class="tooltip">Texture Rip Default Size:<span class="tooltiptext">Sets the resolution for reading textures and normalizing UV coordinates. Match this to the actual texture size on the
+target website.</span></label>
 <br>
 <select id="ripper_defaulttexres">
     <option value="16x16">16x16px</option>
@@ -87,6 +88,13 @@
   <input type="checkbox" id="ripper_debug">
   <span class="tooltiptext">Prints info in console</span>
   Debug Mode
+</label>
+
+<br>
+<label class="tooltip">
+  <input type="checkbox" id="ripper_forceintmode">
+  <span class="tooltiptext">Overrides auto-detection. Forces vertex ÷1000 and UV ÷texture resolution. Leave off for automatic detection.</span>
+  Force Integer Data Normalization
 </label>
 
 <div id="status"></div>

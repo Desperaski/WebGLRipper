@@ -7,7 +7,8 @@
 		is_debug_mode: true,
 		unflip_textures: true,
 		should_download_zip: false,
-		minimum_clears: 1
+		minimum_clears: 1,
+		force_int_mode: false,
 	}, function(items) {
 
 		let hiddenSettings = document.createElement("div");

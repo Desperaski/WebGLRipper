@@ -7,6 +7,7 @@ function save_options() {
   let unfliptex = document.getElementById('ripper_shouldfliptextures').checked;
   let downloadzip = document.getElementById('ripper_downloadzip').checked;
   let modelview = document.getElementById('ripper_domodelviewmatrix').checked;
+  let forceintmode = document.getElementById('ripper_forceintmode').checked;
 
   (chrome || browser).storage.sync.set({
     default_texture_res: defaultTextureRes,
@@ -15,7 +16,8 @@ function save_options() {
     unflip_textures: unfliptex,
     do_model_view_matrix: modelview,
     should_download_zip: downloadzip,
-    minimum_clears: minimumClears
+    minimum_clears: minimumClears,
+    force_int_mode: forceintmode
   }, function() {
     // Update status to let user know options were saved.
     var status = document.getElementById('status');
@@ -35,8 +37,9 @@ function restore_options() {
     is_debug_mode: false,
     unflip_textures: true,
     do_model_view_matrix: true,
-    should_download_zip: false,
-    minimum_clears: 1
+    should_download_zip: true,
+    minimum_clears: 1,
+    force_int_mode: false
   }, function(items) {
     document.getElementById('ripper_defaulttexres').value = items.default_texture_res;
     document.getElementById('ripper_shadercalc').checked = items.do_shader_calc;
@@ -45,6 +48,7 @@ function restore_options() {
     document.getElementById('ripper_domodelviewmatrix').checked = items.do_model_view_matrix;
     document.getElementById('ripper_downloadzip').checked = items.should_download_zip;
     document.getElementById('ripper_minimumclears').value = items.minimum_clears;
+    document.getElementById('ripper_forceintmode').checked = items.force_int_mode;
   });
 }
 

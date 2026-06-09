@@ -1,0 +1,30 @@
+# Папки сборщиков (Webpack, Vite, Rollup и т.д.)
+dist/
+build/
+out/
+test/
+
+*.bin
+*.zip
+*.rar
+
+# Системный мусор операционных систем
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Настройки редакторов кода
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Логи и зависимости Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache

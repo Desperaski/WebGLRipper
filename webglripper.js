@@ -71,6 +71,10 @@ const OBJUtils = {
 			this.primitives = _Primitives;
 			this.textures = _Textures;
 			this.name = _Name || `rip${Math.random()}`;
+
+			// Автоопределение размера текстуры из настроек
+			this.texWidth = _window.WEBGLRipperSettings?.defaultTexWidth || 4096;
+			this.texHeight = _window.WEBGLRipperSettings?.defaultTexHeight || 4096;
 		}
 
 		transform(matrix) {
@@ -86,32 +90,58 @@ const OBJUtils = {
 
 		BuildOBJ() {
 			let obj = '';
-			obj += `mtllib ${this.name}.mtl\n`; // Set model library to use
-			obj += `o ${this.name}\n`; 			// Define model name
+			obj += `mtllib ${this.name}.mtl\n`;
+			obj += `o ${this.name}\n`;
 
+			// Определение масштаба
+			let vertexScale = 1.0;
+			let uvScaleU = 1.0;
+			let uvScaleV = 1.0;
+
+			if (_window.WEBGLRipperSettings.forceIntMode) {
+				vertexScale = 0.001;
+				uvScaleU = this.texWidth;
+				uvScaleV = this.texHeight;
+				LogToParent("Using FORCED integer normalization");
+			} else {
+				if (this._detectIntegerVertices()) {
+					vertexScale = 0.001;
+					LogToParent("Auto-detected integer vertices");
+				}
+				let [detU, detV] = this._detectUVScale();
+				if (detU > 1 || detV > 1) {
+					uvScaleU = detU;
+					uvScaleV = detV;
+					LogToParent(`Auto-detected pixel UVs: ${detU}x${detV}`);
+				}
+			}
+
+			// Вершины
 			for (let vI = 0; vI < this.vertex.length; vI += 3) {
 				obj += 'v ';
 				for (let vJ = 0; vJ < 3; ++vJ)
-					obj += this.vertex[vI + vJ] + ' ';
+					obj += (this.vertex[vI + vJ] * vertexScale).toFixed(6) + ' ';
 				obj += '\n';
-			} // Write all vertex positions into the obj file
+			}
 
+			// Нормали
 			for (let nI = 0; nI < this.normal.length; nI += 3) {
 				obj += 'vn ';
 				for (let nJ = 0; nJ < 3; ++nJ)
 					obj += this.normal[nI + nJ] + ' ';
 				obj += '\n';
-			} // Write all normal positions into the obj file
+			}
 
+			// UV
 			for (let uI = 0; uI < this.uv.length; uI += 2) {
 				obj += 'vt ';
-				for (let uJ = 0; uJ < 2; ++uJ)
-					obj += this.uv[uI + uJ] + ' ';
+				obj += (this.uv[uI] / uvScaleU).toFixed(6) + ' ';
+				obj += (this.uv[uI + 1] / uvScaleV).toFixed(6) + ' ';
 				obj += '\n';
-			} // Write all Texture Coords into the obj file
+			}
 
-			obj += `usemtl ${this.name}\n`; // Specify to start using the mtl lib for the indices below
-			obj += 's on \n';                // Enable Smooth Shading
+			obj += `usemtl ${this.name}\n`;
+			obj += 's on \n';
 
 			let hasNormals = this.normal.length != 0;
 			let hasUVs = this.uv.length != 0;
@@ -142,7 +172,7 @@ const OBJUtils = {
 						obj += '\n';
 					}
 					break;
-			} // Write indices into obj file
+			}
 			return obj;
 		}
 
@@ -153,6 +183,49 @@ const OBJUtils = {
 				mtl += `${texture.getTexString()}\n`;
 			});
 			return mtl;
+		}
+
+		_detectIntegerVertices() {
+			if (this.vertex.length < 100) return false;
+
+			// Если данные в Int16/Uint16 формате — сразу нормализуем
+			if (this.vertex instanceof Uint16Array ||
+				this.vertex instanceof Int16Array ||
+				this.vertex instanceof Uint8Array ||
+				this.vertex instanceof Int8Array) {
+				LogToParent("Integer vertex detected by type: " + this.vertex.constructor.name);
+				return true;
+			}
+
+			// Для Float32 проверяем эвристикой (старая логика)
+			let integerCount = 0;
+			let checkCount = Math.min(300, this.vertex.length);
+			for (let i = 0; i < checkCount; i++) {
+				let val = Math.abs(this.vertex[i]);
+				if (val > 100 && Math.abs(val - Math.round(val)) < 0.001) {
+					integerCount++;
+				}
+			}
+			let ratio = integerCount / checkCount;
+			LogToParent(`Integer vertex detection (Float32): ${(ratio * 100).toFixed(1)}%`);
+			return ratio > 0.7; // Снизили порог до 70%
+		}
+
+		_detectUVScale() {
+			if (this.uv.length === 0) return [1, 1];
+			let maxU = 0, maxV = 0;
+			for (let i = 0; i < this.uv.length; i += 2) {
+				maxU = Math.max(maxU, Math.abs(this.uv[i]));
+				maxV = Math.max(maxV, Math.abs(this.uv[i + 1]));
+			}
+			LogToParent(`UV range: U[0-${maxU.toFixed(0)}], V[0-${maxV.toFixed(0)}]`);
+			if (maxU > 10 || maxV > 10) {
+				let scaleU = maxU + 1;
+				let scaleV = maxV + 1;
+				LogToParent(`Auto-detected pixel UVs, dividing by: ${scaleU}x${scaleV}`);
+				return [scaleU, scaleV];
+			}
+			return [1, 1];
 		}
 	}
 } // OBJ File Namespace
@@ -249,6 +322,7 @@ let loadWebGLRipperSettings = function() {
 	_window.WEBGLRipperSettings.doModelViewMatrix = settings.do_model_view_matrix;
 	_window.WEBGLRipperSettings.shouldDownloadZip = settings.should_download_zip;
 	_window.WEBGLRipperSettings.minimumClears = parseInt(settings.minimum_clears);
+	_window.WEBGLRipperSettings.forceIntMode = settings.force_int_mode || false;
 	_window.WEBGLRipperSettings.hasLoadedSettings = true;
 };
 
@@ -448,34 +522,55 @@ class WebGLRipperWrapper {
 
 	HelperFunc_IsPossibleTextureUniform(texname) {
 		const textureMap = new Map();
-	
-		// Diffuse / Ambient
-		textureMap.set('map'           , 'map_Kd');
-		textureMap.set('usampler'      , 'map_Kd');
-		textureMap.set('texture'       , 'map_Kd');
-		textureMap.set('bonesampler'   , 'map_Kd');
-		textureMap.set('bonetexture'   , 'map_Kd');
-		textureMap.set('albedosampler' , 'map_Kd');
-		textureMap.set('source'        , 'map_Kd');
-		textureMap.set('u_texture'     , 'map_Kd');
+
+		// Diffuse / Albedo — основной цвет
+		textureMap.set('map', 'map_Kd');
+		textureMap.set('usampler', 'map_Kd');
+		textureMap.set('texture', 'map_Kd');
+		textureMap.set('bonesampler', 'map_Kd');
+		textureMap.set('bonetexture', 'map_Kd');
+		textureMap.set('albedosampler', 'map_Kd');
+		textureMap.set('source', 'map_Kd');
+		textureMap.set('u_texture', 'map_Kd');
 		textureMap.set('texture_envatlas', 'map_Kd');
 		// classic.minecraft.net
-		textureMap.set("diffusesampler", 'map_Kd'); 
-		textureMap.set("ambientsampler", 'map_Kd');
-		for (let t = 0; t < 32; t++) 
-			textureMap.set(`texture${t}`,'map_Kd');
-		
-		// Normals
-		textureMap.set('normalmap',   'norm'); /* PBR rendering */
+		textureMap.set('diffusesampler', 'map_Kd');
+		textureMap.set('ambientsampler', 'map_Kd');
+		for (let t = 0; t < 32; t++)
+			textureMap.set(`texture${t}`, 'map_Kd');
 
-		// Roughness
+		// Normals — карта нормалей (рельеф)
+		textureMap.set('normalmap', 'norm');
+
+		// Roughness — шероховатость (матовость / глянец)
 		textureMap.set('roughnessmap', 'map_Pr'); // three.js
-		
-		if(!textureMap.has(texname.toLowerCase())) {
-			LogToParent("Not a known texture type: ", texname);
+		textureMap.set('glossinessmap', 'map_Pr'); // Babylon.js, Sketchfab
+		textureMap.set('specularmap', 'map_Pr');
+		textureMap.set('u_roughnessmap', 'map_Pr');
+
+		// Metallic — металличность
+		textureMap.set('metalnessmap', 'map_Pm');
+		textureMap.set('metallicmap', 'map_Pm'); // альтернативное имя
+		textureMap.set('u_metallicmap', 'map_Pm');
+
+		// Ambient Occlusion — микро-тени в складках
+		textureMap.set('aomap', 'map_Ao');
+		textureMap.set('ambientocclusionmap', 'map_Ao');
+		textureMap.set('occlusionmap', 'map_Ao');
+
+		// Emissive — свечение
+		textureMap.set('emissivemap', 'map_Ke');
+
+		// Environment map — отражения окружения (панорама)
+		// Компромисс: в MTL-спецификации нет типа для env-карт,
+		// сохраняем как map_Ke чтобы плагин не ругался и файл не терялся
+		textureMap.set('envmap', 'map_Ke');
+
+		if (!textureMap.has(texname.toLowerCase())) {
+			LogToParent('Not a known texture type: ', texname);
 			return null;
 		}
-	
+
 		return textureMap.get(texname.toLowerCase());
 	}
 
@@ -575,8 +670,17 @@ class WebGLRipperWrapper {
 				return;
 			}
 
-			let texWidth = tex.width || _window.WEBGLRipperSettings.defaultTexWidth;
-			let texHeight = tex.height || _window.WEBGLRipperSettings.defaultTexHeight;
+			let texWidth = tex.width;
+			let texHeight = tex.height;
+
+			// Fallback на настройки — WebGL не отдаёт размер текстуры
+			texWidth = texWidth || _window.WEBGLRipperSettings.defaultTexWidth;
+			texHeight = texHeight || _window.WEBGLRipperSettings.defaultTexHeight;
+
+			// Fallback на настройки
+			texWidth = tex.width || _window.WEBGLRipperSettings.defaultTexWidth;
+			texHeight = tex.height || _window.WEBGLRipperSettings.defaultTexHeight;
+
 			let uri = self.HelperFunc_GetDataURIFromWebGLTexture(gl, tex, texWidth, texHeight, _window.WEBGLRipperSettings.shouldUnFlipTex);
 
 			if (uri == null) {
@@ -843,41 +947,38 @@ class WebGLRipperWrapper {
 		self._GLActiveTextureIndex = args[0] - gl.TEXTURE0;
 	}
 
-	hooked_texImage2D(self, gl, args, oFunc) { // https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/texImage2D
+	hooked_texImage2D(self, gl, args, oFunc) {
 		let target = args[0];
-		if (target != gl.TEXTURE_2D)
-			return;
+		if (target != gl.TEXTURE_2D) return;
+
+		let level = args[1] || 0; // второй аргумент — это level
+
+		// Сохраняем размер только для нулевого уровня (не mipmap'ы)
+		if (level === 0) {
+			let width = null, height = null;
+
+			if (args.length >= 9) {
+				width = args[3];
+				height = args[4];
+			} else if (args.length >= 6) {
+				let pixels = args[5];
+				if (pixels && (pixels instanceof HTMLImageElement || pixels instanceof HTMLCanvasElement || pixels instanceof ImageBitmap)) {
+					width = pixels.width;
+					height = pixels.height;
+				}
+			}
+
+			if (width && height) {
+				self._GLCurrentBoundTexture.width = width;
+				self._GLCurrentBoundTexture.height = height;
+				LogToParent(`Detected texture size from args (level 0): ${width}x${height}`);
+			}
+		}
+
 		self._GLAllTextures.forEach(glTex => {
-			if(glTex == self._GLCurrentBoundTexture) 
-				glTex.is2DTexture = true;		
+			if (glTex == self._GLCurrentBoundTexture)
+				glTex.is2DTexture = true;
 		});
-
-		// Attempt to get width and height of texture
-		let pixels = null;
-		switch (args.length) {
-			case 9:
-				pixels = args[8];
-				break;
-			case 6:
-				pixels = args[5];
-				break;
-		}
-	
-		if (pixels == null)
-			return;
-
-		let _ArrayBufferView = (new Uint16Array()).constructor.prototype.__proto__.constructor;
-		if ((pixels instanceof _ArrayBufferView))
-			return;
-
-		if (pixels instanceof ImageData || 
-			pixels instanceof HTMLImageElement || 
-			pixels instanceof HTMLCanvasElement || 
-			pixels instanceof HTMLVideoElement || 
-			pixels instanceof ImageBitmap) {
-			self._GLCurrentBoundTexture.width = pixels.width;
-			self._GLCurrentBoundTexture.height = pixels.height;
-		}
 	}
 
 	hooked_shaderSource(self, gl, args, oFunc) { // https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/shaderSource
